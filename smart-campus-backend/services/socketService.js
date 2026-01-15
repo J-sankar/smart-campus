@@ -11,6 +11,7 @@ export const notifyRoomUpdate = (io, roomData) => {
   io.emit('room_update', {
     roomId: roomData.roomId,
     occupancy: roomData.liveStatus.currentOccupancy,
+    capacity: roomData.capacity,
     isGhost: roomData.liveStatus.isGhost,
     lastUpdated: roomData.liveStatus.lastUpdated
   });

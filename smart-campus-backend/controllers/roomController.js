@@ -1,5 +1,5 @@
 import Room from '../models/Room.js';
-// import RoomHistory from '../models/RoomHistory.js';
+import History from '../models/History.js';
 import { getRoomSchedule } from '../services/calendarService.js'; // Ensure this exists
 import { notifyRoomUpdate } from '../services/socketService.js';
 
@@ -47,6 +47,14 @@ export const updateRoomStatus = async (req, res) => {
     room.liveStatus.isGhost = isGhost;
     
     await room.save();
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    await History.create({
+      roomId: room.roomId,
+      occupancy: personCount,
+      capacity: room.capacity,
+      isGhost: isGhost,
+      dayOfWeek: days[new Date().getDay()]
+    });
 
     // 4. LOG HISTORY (Snapshot every 15 mins for Analytics)
     // We check the last history entry to avoid spamming the DB

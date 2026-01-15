@@ -5,24 +5,36 @@ export default function ClassroomCard({ room, status, onClick }) {
     available: "#ccf6c5",
     occupied: "#f8d8d8",
     partial: "#ffe7a5",
+    ghost: "#ffedd5",
   };
 
+  const statusLabels = {
+    available: "Available now",
+    occupied: "Occupied",
+    partial: "Partially Filled",
+    ghost: "⚠️ Ghost Booking",
+  };
+
+  const occupancy = room.liveStatus?.currentOccupancy || 0;
+  const capacity = room.capacity || 0;
+  
   return (
     <div
       onClick={onClick}
       style={{
         ...styles.card,
-        backgroundColor: colors[status] || "#c3ecf6",
+        backgroundColor: colors[status] || "#f0f0f0",
+        border: status === "ghost" ? "2px solid #f97316" : "none" // Extra border for ghosts
       }}
     >
-      <h3>{room.name}</h3>
-      <p>
-        {status === "available" && "Available now"}
-        {status === "occupied" && "Occupied"}
-        {status === "partial" && "Free soon"}
+      <h3>{room.roomId}</h3> {/* Display Room Number */}
+      
+      <p style={{ fontWeight: "bold", color: "#333" }}>
+        {statusLabels[status] || "Unknown"}
       </p>
-      <p style={{ fontSize: 12, marginTop: 8, color: "#1e1e1e", }}>
-        Seats: {room.occupiedSeats} / {room.totalSeats}
+
+      <p style={{ fontSize: 14, marginTop: 8, color: "#1e1e1e" }}>
+        👥 Seats: {occupancy} / {capacity}
       </p>
     </div>
   );

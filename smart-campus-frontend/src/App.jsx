@@ -22,7 +22,7 @@ export default function App() {
           element={<Dashboard role={role} onLogout={handleLogout} />}
         />
         <Route
-          path="/room/:roomName"
+          path="/room/:roomId"
           element={<RoomDetail role={role} onLogout={handleLogout} />}
         />
         {role === "admin" && (
