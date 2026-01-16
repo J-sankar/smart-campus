@@ -1,108 +1,144 @@
 import requests
 import time
+import cv2
 import os
-import random
+import threading
 import sys
-# API Configuration
+
+# ================= CONFIGURATION =================
+# 1. API Endpoint (Matches your Backend Port 8000)
 API_URL = "http://localhost:8000/api/upload-feed"
-BASE_IMAGE_DIR = "test_data"
 
-# The cameras we want to simulate
-# Make sure these folder names exist in 'test_data/'
+# 2. Upload Interval (Seconds)
+# How often to send a frame to the backend. 
+# 2.0 = Every 2 seconds per camera.
+UPLOAD_INTERVAL = 2.0 
 
-# Keep track of current frame index per camera
-camera_frame_index = {}
+# 3. Path Setup (Automatic)
+# Finds the directory where THIS script is running
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Goes up one level to project root, then down to 'test_data'
+VIDEO_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), 'test_data')
 
+# 4. Camera Configuration
+# Map Camera IDs to video filenames inside 'test_data'
+CAM_CONFIG = {
+    "CAM001": "CAM001.mp4", 
+    "CAM002": "CAM002.mp4",
+    # You can reuse videos for testing more rooms
+    # "CAM003": "CAM001.mp4", 
+    # "CAM004": "CAM002.mp4",
+}
+# =================================================
 
-def get_cameras_from_args():
-    """
-    Reads camera IDs from command line arguments.
-    Example: python simulator.py CAM_01 CAM_02
-    """
-    args = sys.argv[1:] # Skip the script name itself
-    if args:
-        return args
-    else:
-        # Default fallback if no args provided
-        print("ℹ️ No args provided. Using defaults.")
-        return ["CAM_001", "CAM_002"]
+# Global event to stop threads safely on Ctrl+C
+stop_event = threading.Event()
 
-def get_next_image_from_folder(cam_id):
-    """
-    Returns the next image in order from test_data/{cam_id}/
-    """
-    folder_path = os.path.join(BASE_IMAGE_DIR, cam_id)
+class CameraThread(threading.Thread):
+    def __init__(self, cameraId, video_filename, api_url, interval):
+        super().__init__()
+        self.cameraId = cameraId
+        self.video_path = os.path.join(VIDEO_DIR, video_filename)
+        self.api_url = api_url
+        self.interval = interval
+        self.daemon = True # Thread dies if main program dies
 
-    if not os.path.exists(folder_path):
-        print(f"⚠️ Warning: Folder '{folder_path}' not found.")
-        return None, None
+    def run(self):
+        # 1. Verify File Exists
+        if not os.path.exists(self.video_path):
+            print(f"❌ {self.cameraId} Error: File not found at {self.video_path}")
+            return
 
-    valid_extensions = ('.jpg', '.jpeg', '.png')
-    files = sorted(
-        f for f in os.listdir(folder_path)
-        if f.lower().endswith(valid_extensions)
-    )
+        print(f"🟢 {self.cameraId} started (Source: {os.path.basename(self.video_path)})")
+        
+        # 2. Open Video
+        cap = cv2.VideoCapture(self.video_path)
+        if not cap.isOpened():
+            print(f"❌ {self.cameraId} Error: Could not open video.")
+            return
 
-    if not files:
-        print(f"⚠️ Warning: No images found in '{folder_path}'")
-        return None, None
+        last_upload_time = 0
 
-    # Initialize index if first time seeing this camera
-    if cam_id not in camera_frame_index:
-        camera_frame_index[cam_id] = 0
+        while not stop_event.is_set():
+            ret, frame = cap.read()
 
-    index = camera_frame_index[cam_id]
-    filename = files[index]
-    file_path = os.path.join(folder_path, filename)
+            # 3. Handle Looping (Rewind if video ends)
+            if not ret:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                continue
 
-    # Move to next frame (loop back if needed)
-    camera_frame_index[cam_id] = (index + 1) % len(files)
+            # 4. Check Upload Timer
+            current_time = time.time()
+            if current_time - last_upload_time > self.interval:
+                
+                # Encode frame to JPG
+                success, encoded_image = cv2.imencode('.jpg', frame)
+                
+                if success:
+                    self.upload_frame(encoded_image.tobytes(), current_time)
+                
+                last_upload_time = current_time
 
-    return filename, file_path
+            # Small sleep to save CPU (since we aren't showing a GUI window)
+            time.sleep(0.01)
 
+        cap.release()
+        print(f"🔴 {self.cameraId} stopped.")
 
-def run_simulation():
-    ACTIVE_CAMERAS = get_cameras_from_args()
-    print(f"Cameras: {ACTIVE_CAMERAS}")
+    def upload_frame(self, image_bytes, timestamp):
+        filename = f"{self.cameraId}_{int(timestamp)}.jpg"
+        
+        # Prepare the payload
+        files = {'file': (filename, image_bytes, 'image/jpeg')}
+        data = {'cameraId': self.cameraId} 
+
+        try:
+            # Send to Node.js Backend
+            response = requests.post(self.api_url, files=files, data=data, timeout=2)
+            
+            if response.status_code == 200:
+                print(f"✅ {self.cameraId} Uploaded Snapshot")
+            else:
+                print(f"⚠️ {self.cameraId} Upload Failed: {response.status_code} - {response.text}")
+                
+        except Exception as e:
+            print(f"🔥 {self.cameraId} Connection Error: {e}")
+
+def main():
+    print(f"🚀 Starting Smart Campus Simulator")
+    print(f"📂 Video Folder: {VIDEO_DIR}")
     print("------------------------------------------------")
 
-    while True:
-        for cam_id in ACTIVE_CAMERAS:
-            
-            # 1. Get an image file from the folder
-            filename, file_path = get_next_image_from_folder(cam_id)
-            
-            if not file_path:
-                continue # Skip this camera if no images found
-            print (file_path)
-            # 2. Read the file bytes
-            try:
-                with open(file_path, "rb") as f:
-                    image_data = f.read()
+    # Double check directory
+    if not os.path.exists(VIDEO_DIR):
+        print(f"❌ CRITICAL: The folder '{VIDEO_DIR}' does not exist!")
+        print(f"   Please create it and put .mp4 files inside.")
+        return
 
-                # 3. Send to API (camera_id + file)
-                files = {'file': (filename, image_data, 'image/jpeg')}
-                data = {'camera_id': cam_id} 
-                
-                response = requests.post(API_URL, files=files, data=data)
-                
-                if response.status_code == 200:
-                    camera = response.json().get("camera_id", "Unknown")
-                    print(f"✅ {cam_id} ({filename}) -> Sent to API ")
-                else:
-                    print(f"❌ {cam_id} Failed: {response.text}")
+    threads = []
 
-            except Exception as e:
-                print(f"🔥 Error sending {cam_id}: {e}")
+    # Start a thread for each camera
+    for cameraId, filename in CAM_CONFIG.items():
+        thread = CameraThread(cameraId, filename, API_URL, UPLOAD_INTERVAL)
+        thread.start()
+        threads.append(thread)
 
-        # Wait 3 seconds before sending the next batch of "frames"
-        print("------------------------------------------------")
-        time.sleep(3)
+    if not threads:
+        print("⚠️ No cameras configured. Check CAM_CONFIG.")
+        return
+
+    # Keep main program running
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n🛑 Stopping simulation...")
+        stop_event.set()
+
+    # Wait for threads to close
+    for t in threads:
+        t.join()
+    print("✅ Simulation ended cleanly.")
 
 if __name__ == "__main__":
-    # Ensure directory exists
-    if not os.path.exists(BASE_IMAGE_DIR):
-        os.makedirs(BASE_IMAGE_DIR)
-        print(f"📁 Created '{BASE_IMAGE_DIR}'. Please put your camera folders inside it!")
-    else:
-        run_simulation()
+    main()
