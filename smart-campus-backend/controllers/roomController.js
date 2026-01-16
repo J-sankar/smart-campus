@@ -89,7 +89,8 @@ export const updateRoomStatus = async (req, res) => {
  * ROUTE: GET /api/rooms
  */
 export const getAllRooms = async (req, res) => {
-  try {
+  try
+  {  
     const rooms = await Room.find().select('roomId name liveStatus type capacity');
     res.json(rooms);
   } catch (error) {

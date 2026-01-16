@@ -17,6 +17,6 @@ router.get('/:id', getRoomDetails);
 
 // 🔒 INTERNAL ROUTE (Used by Python AI)
 // In a real app, you might add middleware like 'verifyAPIKey' here
-router.post('/update-occupancy', updateRoomStatus);
+router.post('/update', updateRoomStatus);
 
 export default router;

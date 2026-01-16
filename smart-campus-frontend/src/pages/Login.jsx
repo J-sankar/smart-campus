@@ -14,6 +14,26 @@ export default function Login({ onLogin }) {
   );
 }
 
+function createRipple(event, color = "rgba(255,255,255,0.6)") {
+  const button = event.currentTarget;
+  const rect = button.getBoundingClientRect();
+
+  const ripple = document.createElement("span");
+  const size = Math.max(rect.width, rect.height);
+
+  ripple.className = "ripple";
+  ripple.style.width = ripple.style.height = `${size}px`;
+  ripple.style.left = `${event.clientX - rect.left - size / 2}px`;
+  ripple.style.top = `${event.clientY - rect.top - size / 2}px`;
+  ripple.style.backgroundColor = color;
+
+  button.appendChild(ripple);
+
+  ripple.addEventListener("animationend", () => {
+    ripple.remove();
+  });
+}
+
 const styles = {
   container: {
     height: "100vh",

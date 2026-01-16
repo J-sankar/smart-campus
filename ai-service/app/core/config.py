@@ -19,7 +19,7 @@ QUEUE_NAME = os.getenv("QUEUE_NAME", "camera_queue")
 # 🟢 NODE.JS BACKEND CONFIGURATION
 # ==========================================
 # Where to send the final person count?
-NODE_BACKEND_URL = os.getenv("NODE_BACKEND_URL", "http://localhost:3000/api/occupancy/update")
+NODE_BACKEND_URL = os.getenv("NODE_API_URL", "http://localhost:5000/api/rooms/update")
 
 # ==========================================
 # 🧠 AI MODEL CONFIGURATION

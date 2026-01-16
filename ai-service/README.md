@@ -91,6 +91,3 @@ Run the FastAPI application using unicorn
 ```bash
 python run.py
 ```
-
-
-
